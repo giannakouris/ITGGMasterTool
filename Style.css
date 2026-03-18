@@ -1,0 +1,75 @@
+:root {
+    --primary: #2E86C1;
+    --secondary: #1B4F72;
+    --bg: #f4f7f9;
+}
+
+body {
+    margin: 0;
+    font-family: Arial;
+    background: var(--bg);
+}
+
+/* Layout */
+.navbar {
+    background: var(--secondary);
+    color: white;
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.container {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 20px;
+    padding: 20px;
+}
+
+.card {
+    background: white;
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+}
+
+.sidebar {
+    position: sticky;
+    top: 10px;
+}
+
+.main {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+}
+
+button {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 10px;
+    margin-top: 5px;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+select {
+    width: 100%;
+    padding: 10px;
+}
+
+/* Invoice */
+#invoicePrint {
+    padding: 20px;
+}
+
+.row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+}
+
+input {
+    padding: 5px;
+}
