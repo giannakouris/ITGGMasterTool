@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<title>ITGG Master Suite v16.5 - Enterprise Gold</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<style>
+    :root { --primary: #2E86C1; --secondary: #1B4F72; --success: #27ae60; --danger: #e74c3c; --warning: #f39c12; --bg: #f4f7f9; }
+    body { font-family: 'Segoe UI', sans-serif; margin: 0; background: var(--bg); color: #333; }
+    
+    /* Layout */
+    .navbar { background: var(--secondary); padding: 10px 40px; display: flex; justify-content: space-between; align-items: center; color: white; box-shadow: 0 2px 10px rgba(0,0,0,0.2); }
+    .container { max-width: 1600px; margin: 20px auto; display: grid; grid-template-columns: 450px 1fr; gap: 20px; padding: 0 20px; }
+    .sidebar { position: sticky; top: 20px; height: calc(100vh - 100px); display: flex; flex-direction: column; }
+    .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.08); margin-bottom: 15px; }
+    
+    /* Filters */
+    .filter-bar { display: flex; gap: 5px; margin-bottom: 15px; }
+    .filter-btn { flex: 1; padding: 8px; font-size: 0.75rem; border: 1px solid #ddd; border-radius: 5px; cursor: pointer; background: white; transition: 0.2s; }
+    .filter-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+    /* Archive */
+    .archive-scroll { overflow-y: auto; flex-grow: 1; }
+    .archive-table { width: 100%; border-collapse: collapse; }
+    .archive-table tr { cursor: pointer; border-bottom: 1px solid #eee; }
+    .archive-table tr:hover { background: #f0f7ff; }
+    .archive-table td { padding: 12px 8px; font-size: 0.85rem; }
+    .status-tag { padding: 2px 6px; border-radius: 4px; font-size: 0.65rem; font-weight: bold; text-transform: uppercase; }
+
+    /* Invoice A4 Design */
+    #invoicePrint { width: 210mm; min-height: 297mm; padding: 20mm; margin: auto; background: white; box-sizing: border-box; border: 1px solid #ddd; color: #000; }
+    .editable { background: #fffdf0; border-bottom: 1px dashed #ccc; transition: 0.2s; }
+    .editable:focus { background: #fff; outline: none; border-bottom: 2px solid var(--primary); }
+    
+    .inv-header { display: flex; justify-content: space-between; border-bottom: 3px solid var(--primary); padding-bottom: 20px; margin-bottom: 30px; }
+    .company-info { font-size: 0.85rem; line-height: 1.4; }
+    .client-info { margin-bottom: 40px; padding: 15px; background: #f9f9f9; border-radius: 8px; border-left: 5px solid var(--secondary); }
+    
+    .inv-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+    .inv-table th { background: #f8f9fa; border: 1px solid #ddd; padding: 12px; text-align: left; font-size: 0.85rem; text-transform: uppercase; }
+    .inv-table td { border: 1px solid #ddd; padding: 12px; vertical-align: top; }
+    
+    .totals-area { margin-left: auto; width: 350px; margin-top: 20px; }
+    .totals-area div { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
+    .total-row { border-top: 2px solid #333 !important; font-weight: bold; font-size: 1.2rem; color: var(--primary); }
+
+    @media print { 
+        .no-print { display: none !important; } 
+        .container { display: block; } 
+        #invoicePrint { border: none; padding: 0; margin: 0; width: 100%; } 
+        body { background: white; } 
+        .editable { background: transparent; border: none; }
+    }
+    .hidden { display: none; }
+</style>
+
+<script>
+const MY_COMPANY = {
+    naam: "ITGG Business Services",
+    adres: "Rivierweg 111",
+    postcode: "2903 AR, Capelle a/d IJssel",
+    iban: "BE54 9054 5122 3997",
+    kvk: "89554122",
+    btw: "NL004751223B97"
+};
+
+const CLIENT_DEFAULTS = {
+    "Mousti Team Flex B.V.": { adres: "Konneweg 10, 3233 LG Brielle", kvk: "88441233", btw: "NL864422331B01" },
+    "Mousti B.V.": { adres: "Konneweg 10, 3233 LG Brielle", kvk: "88441233", btw: "NL864422331B01" },
+    "Navagio / Mousti": { adres: "Voorstraat 22, 3231 BJ Brielle", kvk: "77553311", btw: "NL775533110B01" },
+    "Privé Klant": { adres: "Privé adres", kvk: "-", btw: "-" }
+};
+
+// VOLLEDIG ARCHIEF - 10 FACTUREN GEBASEERD OP UW BESTANDEN
+const initialData = [
+    {id: "INV-0022043", klant: "Mousti Team Flex B.V.", datum: "17-03-2026", diensten: [{type: "Transport", route: "Brielle → Breda → Brielle", detail: "Rijden auto Mousti (2u) + Voorrijkosten", prijs: 65.00}], btw: 21, status: "UNPAID"},
+    {id: "INV-0022042", klant: "Mousti Team Flex B.V.", datum: "16-03-2026", diensten: [{type: "Chauffeur diensten", route: "Brielle → Den Haag", detail: "3 ritten heen/terug + Onderhoud bus", prijs: 145.00}], btw: 21, status: "PAID BANK"},
+    {id: "INV-0022041", klant: "Navagio / Mousti", datum: "14-03-2026", diensten: [{type: "Weekendritten", route: "Brielle → Navagio", detail: "Week 11: 3.75 uur weekendvervoer", prijs: 75.00}], btw: 0, status: "UNPAID"},
+    {id: "INV-0022040", klant: "Navagio / Mousti", datum: "07-03-2026", diensten: [{type: "Chauffeur diensten", route: "Brielle → Navagio", detail: "Week 10: 4.5 uur weekendritten", prijs: 90.00}], btw: 21, status: "UNPAID"},
+    {id: "INV-0022039", klant: "Navagio / Mousti", datum: "28-02-2026", diensten: [{type: "Transport", route: "Brielle → Navagio", detail: "Week 9: 4.5 uur weekendritten", prijs: 90.00}], btw: 21, status: "UNPAID"},
+    {id: "INV-0022038", klant: "Mousti / Navagio", datum: "25-02-2026", diensten: [
+        {type: "Kilometers", route: "Diverse ritten", detail: "175 km @ 0.25", prijs: 43.75},
+        {type: "Parkeerkosten", route: "Rotterdam", detail: "3x Parkeren", prijs: 48.00},
+        {type: "Chauffeur diensten", route: "-", detail: "3.75 uur @ 20.00", prijs: 75.00}
+    ], btw: 21, status: "UNPAID"},
+    {id: "INV-0022037", klant: "Mousti B.V.", datum: "22-02-2026", diensten: [{type: "Transport", route: "Brielle - Vito", detail: "Week 8: Uren + KM + Parkeren", prijs: 86.95}], btw: 21, status: "PAID BANK"},
+    {id: "INV-0022036", klant: "Mousti B.V.", datum: "15-02-2026", diensten: [{type: "Transport", route: "Brielle - Vito", detail: "Week 7: Uren + KM + Parkeren", prijs: 86.95}], btw: 21, status: "PAID BANK"},
+    {id: "INV-0022035", klant: "Mousti B.V.", datum: "08-02-2026", diensten: [{type: "Transport", route: "Brielle - Vito", detail: "Week 6: Uren + KM + Parkeren", prijs: 86.95}], btw: 21, status: "PAID CASH"},
+    {id: "INV-0022034", klant: "Privé Klant", datum: "05-02-2026", diensten: [
+        {type: "Transport", route: "Amsterdam → Tiente", detail: "Bankstel vervoer (4u)", prijs: 342.50},
+        {type: "Correctie", route: "-", detail: "Brandstof & Maaltijd inhouding", prijs: -60.00}
+    ], btw: 21, status: "PAID CASH"}
+];
+
+let db = JSON.parse(localStorage.getItem('itgg_v16_5_db')) || initialData;
+let activeId = null;
+let currentFilter = 'all';
+
+function renderArchive() {
+    const list = document.getElementById('archiveList');
+    list.innerHTML = "";
+    const filtered = db.filter(inv => {
+        if(currentFilter === 'paid') return inv.status.includes('PAID');
+        if(currentFilter === 'unpaid') return inv.status === 'UNPAID';
+        return true;
+    });
+    filtered.forEach(inv => {
+        let statusColor = inv.status.includes('BANK') ? 'var(--primary)' : (inv.status.includes('CASH') ? 'var(--success)' : 'var(--danger)');
+        let total = inv.diensten.reduce((a, b) => a + b.prijs, 0);
+        list.innerHTML += `<tr onclick="viewInvoice('${inv.id}')">
+            <td><strong>${inv.id}</strong><br><span class="status-tag" style="background:${statusColor}; color:white">${inv.status}</span></td>
+            <td>${inv.klant}<br><small>${inv.datum}</small></td>
+            <td style="text-align:right">€${total.toFixed(2)}</td>
+        </tr>`;
+    });
+}
+
+function setFilter(f) {
+    currentFilter = f;
+    document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+    event.currentTarget.classList.add('active');
+    renderArchive();
+}
+
+function viewInvoice(id) {
+    const inv = db.find(i => i.id === id);
+    activeId = id;
+    const client = CLIENT_DEFAULTS[inv.klant] || { adres: "Adres onbekend", kvk: "-", btw: "-" };
+    
+    document.getElementById('welcome').classList.add('hidden');
+    document.getElementById('previewBox').classList.remove('hidden');
+    document.getElementById('btw-select').value = inv.btw;
+
+    let rowsHtml = inv.diensten.map(d => `
+        <tr>
+            <td>
+                <div class="editable" contenteditable="true" style="font-weight:bold">${d.type}</div>
+                <div class="editable" contenteditable="true" style="font-size:0.8rem; color:var(--primary)">Traject: ${d.route}</div>
+                <div class="editable" contenteditable="true" style="font-size:0.85rem; color:#666">${d.detail}</div>
+            </td>
+            <td style="text-align:right">€ <span class="editable row-val" contenteditable="true" oninput="calcTotals()">${d.prijs.toFixed(2)}</span></td>
+        </tr>
+    `).join('');
+
+    document.getElementById('invoicePrint').innerHTML = `
+        <div class="inv-header">
+            <div class="company-info">
+                <div style="font-size:1.5rem; font-weight:bold; color:var(--primary); margin-bottom:5px">ITGG SERVICES</div>
+                <strong>${MY_COMPANY.naam}</strong><br>
+                ${MY_COMPANY.adres}<br>${MY_COMPANY.postcode}<br>
+                <strong>KVK:</strong> ${MY_COMPANY.kvk} | <strong>BTW:</strong> ${MY_COMPANY.btw}<br>
+                <strong>IBAN:</strong> ${MY_COMPANY.iban}
+            </div>
+            <div style="text-align:right">
+                <h1 style="color:var(--primary); margin:0; font-size:2.5rem">FACTUUR</h1>
+                <p style="font-size:1.1rem">Factuurnr: <span class="editable" contenteditable="true">${inv.id}</span><br>
+                Datum: <span class="editable" contenteditable="true">${inv.datum}</span></p>
+            </div>
+        </div>
+
+        <div class="client-info">
+            <small style="text-transform:uppercase; color:#777; font-weight:bold">Factureren aan:</small><br>
+            <div style="font-size:1.2rem; font-weight:bold" class="editable" contenteditable="true">${inv.klant}</div>
+            <div class="editable" contenteditable="true">${client.adres}</div>
+            <div style="font-size:0.85rem; margin-top:5px">
+                <strong>KVK:</strong> <span class="editable" contenteditable="true">${client.kvk}</span> | 
+                <strong>BTW:</strong> <span class="editable" contenteditable="true">${client.btw}</span>
+            </div>
+        </div>
+
+        <table class="inv-table">
+            <thead>
+                <tr><th>Omschrijving Diensten & Trajecten</th><th style="width:150px; text-align:right">Bedrag (€)</th></tr>
+            </thead>
+            <tbody id="inv-body">${rowsHtml}</tbody>
+        </table>
+        <button class="no-print" onclick="addRow()" style="background:#f0f0f0; border:1px solid #ccc; padding:5px 10px; cursor:pointer">+ Regel toevoegen</button>
+
+        <div class="totals-area">
+            <div><span>Subtotaal</span> <span>€ <span id="res-sub">0.00</span></span></div>
+            <div><span>BTW (<span id="res-btw-pct">${inv.btw}</span>%)</span> <span>€ <span id="res-btw-val">0.00</span></span></div>
+            <div class="total-row">
+                <span>TOTAAL</span> <span>€ <span id="res-total">0.00</span></span>
+            </div>
+        </div>
+
+        <div style="margin-top:80px; padding:20px; background:#fff9c4; border-radius:8px; font-size:0.85rem" class="no-print">
+            <strong>Betaalinstructie:</strong> Gelieve het totaalbedrag binnen 14 dagen over te maken naar <strong>${MY_COMPANY.iban}</strong> o.v.v. factuurnummer <strong>${inv.id}</strong>.
+        </div>
+        
+        <div style="margin-top:50px; text-align:center; font-size:0.75rem; color:#999; border-top:1px solid #eee; padding-top:10px">
+            ITGG Business Services • Rivierweg 111 • Capelle a/d IJssel • KVK ${MY_COMPANY.kvk}
+        </div>
+    `;
+    calcTotals();
+}
+
+function addRow() {
+    const table = document.getElementById('inv-body');
+    const row = table.insertRow();
+    row.innerHTML = `
+        <td>
+            <div class="editable" contenteditable="true" style="font-weight:bold">Nieuwe Dienst</div>
+            <div class="editable" contenteditable="true" style="font-size:0.8rem; color:var(--primary)">Traject: ...</div>
+            <div class="editable" contenteditable="true" style="font-size:0.85rem; color:#666">Details...</div>
+        </td>
+        <td style="text-align:right">€ <span class="editable row-val" contenteditable="true" oninput="calcTotals()">0.00</span></td>
+    `;
+}
+
+function calcTotals() {
+    let sub = 0;
+    document.querySelectorAll('.row-val').forEach(el => {
+        sub += parseFloat(el.innerText.replace(',', '.')) || 0;
+    });
+    const pct = parseFloat(document.getElementById('btw-select').value);
+    const btwVal = sub * (pct / 100);
+    document.getElementById('res-sub').innerText = sub.toFixed(2);
+    document.getElementById('res-btw-pct').innerText = pct;
+    document.getElementById('res-btw-val').innerText = btwVal.toFixed(2);
+    document.getElementById('res-total').innerText = (sub + btwVal).toFixed(2);
+}
+
+function createNew() {
+    const newKlant = document.getElementById('newKlant').value || "Nieuwe Klant";
+    const newId = "INV-00220" + (db.length + 45);
+    const newInv = {
+        id: newId,
+        klant: newKlant,
+        datum: new Date().toLocaleDateString('nl-NL'),
+        diensten: [{type: "Transportdiensten", route: "Brielle → ...", detail: "Nieuwe opdracht", prijs: 0}],
+        btw: 21,
+        status: "UNPAID"
+    };
+    db.unshift(newInv);
+    localStorage.setItem('itgg_v16_5_db', JSON.stringify(db));
+    renderArchive();
+    viewInvoice(newId);
+}
+
+function updateStatus(s) {
+    if(!activeId) return;
+    const idx = db.findIndex(i => i.id === activeId);
+    db[idx].status = s;
+    localStorage.setItem('itgg_v16_5_db', JSON.stringify(db));
+    renderArchive();
+    alert("Status bijgewerkt naar: " + s);
+}
+
+window.onload = renderArchive;
+</script>
+</head>
+<body>
+
+<div class="navbar no-print">
+    <div style="display:flex; align-items:center; gap:10px">
+        <h2 style="margin:0; letter-spacing:1px">ITGG BUSINESS SUITE v16.5</h2>
+    </div>
+    <div>
+        <button style="background:var(--danger); color:white; border:none; padding:8px 15px; border-radius:5px; cursor:pointer" onclick="if(confirm('Systeem wissen?')) {localStorage.clear(); location.reload();}">Systeem Reset</button>
+    </div>
+</div>
+
+<div class="container">
+    <div class="sidebar no-print">
+        <div class="card">
+            <h4>Nieuwe Factuur</h4>
+            <select id="newKlant" style="width:100%; padding:10px; border-radius:5px; margin-bottom:10px">
+                <option value="Mousti Team Flex B.V.">Mousti Team Flex B.V.</option>
+                <option value="Mousti B.V.">Mousti B.V.</option>
+                <option value="Navagio / Mousti">Navagio / Mousti</option>
+                <option value="Privé Klant">Overige/Privé</option>
+            </select>
+            <button class="filter-btn active" style="width:100%; background:var(--success); color:white; border:none; padding:10px; font-weight:bold" onclick="createNew()">+ Factuur Aanmaken</button>
+        </div>
+
+        <div class="card" style="flex-grow:1; display:flex; flex-direction:column">
+            <h4>Administratie Archief</h4>
+            <div class="filter-bar">
+                <button class="filter-btn active" onclick="setFilter('all')">Alles</button>
+                <button class="filter-btn" onclick="setFilter('paid')">Betaald</button>
+                <button class="filter-btn" onclick="setFilter('unpaid')">Openstaand</button>
+            </div>
+            <div class="archive-scroll">
+                <table class="archive-table">
+                    <tbody id="archiveList"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div id="welcome" class="card" style="text-align:center; padding:150px 0; color:#bdc3c7; border:3px dashed #ddd">
+            <h1 style="font-size:3rem; margin:0">Welkom ITGG</h1>
+            <p>Selecteer een factuur uit het archief om te bewerken, printen of status te wijzigen.</p>
+        </div>
+
+        <div id="previewBox" class="hidden">
+            <div class="card no-print" style="display:flex; gap:10px; background:#e1e8ed; align-items:center; border:1px solid #cbd5e0">
+                <strong>Beheer:</strong>
+                <select id="btw-select" onchange="calcTotals()" style="padding:5px; border-radius:4px">
+                    <option value="21">BTW 21%</option>
+                    <option value="0">BTW 0% (Verlegd)</option>
+                </select>
+                <div style="flex-grow:1"></div>
+                <button style="background:var(--primary); color:white; border:none; padding:8px 12px; border-radius:4px; cursor:pointer" onclick="updateStatus('PAID BANK')">Meld Betaald (Bank)</button>
+                <button style="background:var(--success); color:white; border:none; padding:8px 12px; border-radius:4px; cursor:pointer" onclick="updateStatus('PAID CASH')">Meld Betaald (Cash)</button>
+                <button style="background:var(--danger); color:white; border:none; padding:8px 12px; border-radius:4px; cursor:pointer" onclick="updateStatus('UNPAID')">Zet Openstaand</button>
+                <button style="background:#333; color:white; border:none; padding:8px 12px; border-radius:4px; cursor:pointer" onclick="window.print()">🖨️ Print / PDF</button>
+            </div>
+
+            <div id="invoicePrint"></div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
